@@ -168,7 +168,9 @@ pub extern "C" fn oom(_layout: Layout) -> ! {
 fn main() {
     let bootinfo = unsafe { &*BOOTINFO };
 
-    let global_fault_ep = fel4_test_project::init(bootinfo);
+    let mut init_sys = fel4_test_project::InitSystem::new(bootinfo);
+
+    let global_fault_ep = init_sys.init();
 
     // wait on the fault endpoint if given one
     loop {
@@ -179,8 +181,8 @@ fn main() {
 
             debug_println!("\nroot-task thread got notification badge 0x{:X}", badge);
 
-            if fel4_test_project::is_fault(badge) {
-                fel4_test_project::handle_fault(badge);
+            if init_sys.is_fault(badge) {
+                init_sys.handle_fault(badge);
             }
         } else {
             unsafe {
