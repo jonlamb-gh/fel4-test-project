@@ -158,7 +158,6 @@ pub fn eh_personality() {
     }
 }
 
-//#[lang = "oom"]
 pub fn alloc_error_handler(_layout: Layout) -> ! {
     #[cfg(feature = "KernelPrinting")]
     {
@@ -171,83 +170,10 @@ pub fn alloc_error_handler(_layout: Layout) -> ! {
     unsafe { core::intrinsics::abort() }
 }
 
-fn get_untyped(info: &seL4_BootInfo, size_bytes: usize) -> Option<seL4_CPtr> {
-    let mut idx = 0;
-    for i in info.untyped.start..info.untyped.end {
-        if (1 << info.untypedList[idx].sizeBits) >= size_bytes {
-            return Some(i);
-        }
-        idx += 1;
-    }
-    None
-}
-
-const CHILD_STACK_SIZE: usize = 4096;
-static mut CHILD_STACK: *const [u64; CHILD_STACK_SIZE] = &[0; CHILD_STACK_SIZE];
-
 fn main() {
-    debug_println!("root_task::main()");
-
     let bootinfo = unsafe { &*BOOTINFO };
 
-    unsafe { seL4_SetUserData(bootinfo.ipcBuffer as _) };
-
     let global_fault_ep = fel4_test_project::init(bootinfo);
-
-    let cspace_cap = seL4_CapInitThreadCNode;
-    let pd_cap = seL4_CapInitThreadVSpace;
-    let tcb_cap = bootinfo.empty.start;
-    let untyped = get_untyped(bootinfo, 1 << seL4_TCBBits).unwrap();
-    let retype_err: seL4_Error = unsafe {
-        seL4_Untyped_Retype(
-            untyped,
-            api_object_seL4_TCBObject.into(),
-            seL4_TCBBits.into(),
-            cspace_cap.into(),
-            cspace_cap.into(),
-            seL4_WordBits.into(),
-            tcb_cap,
-            1,
-        )
-    };
-
-    assert!(retype_err == 0, "Failed to retype untyped memory");
-
-    let tcb_err: seL4_Error = unsafe {
-        seL4_TCB_Configure(
-            tcb_cap,
-            seL4_CapNull.into(),
-            cspace_cap.into(),
-            seL4_NilData.into(),
-            pd_cap.into(),
-            seL4_NilData.into(),
-            0,
-            0,
-        )
-    };
-
-    assert!(tcb_err == 0, "Failed to configure TCB");
-
-    let stack_base = unsafe { CHILD_STACK as usize };
-    let stack_top = stack_base + CHILD_STACK_SIZE;
-    let mut regs: seL4_UserContext = unsafe { mem::zeroed() };
-
-    #[allow(const_err)]
-    {
-        #[cfg(feature = "test")]
-        {
-            regs.pc = fel4_test_project::fel4_test::run as _;
-        }
-        #[cfg(not(feature = "test"))]
-        {
-            regs.pc = fel4_test_project::run as _;
-        }
-    }
-    regs.sp = stack_top as seL4_Word;
-
-    let _: u32 = unsafe { seL4_TCB_WriteRegisters(tcb_cap, 0, 0, 2, &mut regs) };
-    let _: u32 = unsafe { seL4_TCB_SetPriority(tcb_cap, seL4_CapInitThreadTCB.into(), 255) };
-    let _: u32 = unsafe { seL4_TCB_Resume(tcb_cap) };
 
     // TODO - create a fault endpoint to listen on
     loop {
