@@ -18,6 +18,10 @@ extern crate wee_alloc;
 extern crate proptest;
 extern crate fel4_test_project;
 
+#[path = "../macros.rs"]
+#[macro_use]
+mod macros;
+
 use core::alloc::Layout;
 use core::intrinsics;
 use core::mem;
@@ -98,7 +102,6 @@ impl Termination for () {
 }
 
 #[lang = "start"]
-//#[no_mangle]
 fn lang_start<T: Termination + 'static>(
     main: fn() -> T,
     _argc: isize,
@@ -183,7 +186,14 @@ const CHILD_STACK_SIZE: usize = 4096;
 static mut CHILD_STACK: *const [u64; CHILD_STACK_SIZE] = &[0; CHILD_STACK_SIZE];
 
 fn main() {
+    debug_println!("root_task::main()");
+
     let bootinfo = unsafe { &*BOOTINFO };
+
+    unsafe { seL4_SetUserData(bootinfo.ipcBuffer as _) };
+
+    let global_fault_ep = fel4_test_project::init(bootinfo);
+
     let cspace_cap = seL4_CapInitThreadCNode;
     let pd_cap = seL4_CapInitThreadVSpace;
     let tcb_cap = bootinfo.empty.start;
@@ -226,11 +236,11 @@ fn main() {
     {
         #[cfg(feature = "test")]
         {
-            regs.pc = fel4_test_project::fel4_test::run as seL4_Word;
+            regs.pc = fel4_test_project::fel4_test::run as _;
         }
         #[cfg(not(feature = "test"))]
         {
-            regs.pc = fel4_test_project::run as fn() as _;
+            regs.pc = fel4_test_project::run as _;
         }
     }
     regs.sp = stack_top as seL4_Word;
@@ -238,6 +248,8 @@ fn main() {
     let _: u32 = unsafe { seL4_TCB_WriteRegisters(tcb_cap, 0, 0, 2, &mut regs) };
     let _: u32 = unsafe { seL4_TCB_SetPriority(tcb_cap, seL4_CapInitThreadTCB.into(), 255) };
     let _: u32 = unsafe { seL4_TCB_Resume(tcb_cap) };
+
+    // TODO - create a fault endpoint to listen on
     loop {
         unsafe {
             seL4_Yield();

@@ -14,21 +14,21 @@ extern crate proptest;
 #[cfg(feature = "test")]
 pub mod fel4_test;
 
+#[macro_use]
+mod macros;
+
+use sel4_sys::{seL4_BootInfo, seL4_CPtr};
+
 #[cfg(feature = "KernelPrinting")]
 use sel4_sys::DebugOutHandle;
 
-macro_rules! debug_print {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        DebugOutHandle.write_fmt(format_args!($($arg)*)).unwrap();
-    });
-}
+/// Returns cap to global fault endpoint if so desired (TODO and handler fn?)
+pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
+    debug_println!("lib::init()");
 
-macro_rules! debug_println {
-    ($fmt:expr) => (debug_print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => (debug_print!(concat!($fmt, "\n"), $($arg)*));
+    None
 }
 
 pub fn run() {
-    debug_println!("\nhello from a feL4 app!\n");
+    debug_println!("lib::run()");
 }
