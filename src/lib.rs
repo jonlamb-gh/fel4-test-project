@@ -1,24 +1,15 @@
 #![no_std]
 #![cfg_attr(feature = "alloc", feature(alloc))]
 
-#[cfg(all(feature = "alloc"))]
-#[macro_use]
 extern crate alloc;
-
-#[cfg(all(feature = "test"))]
-#[macro_use]
-extern crate proptest;
-
 extern crate sel4_sys;
-
-#[cfg(feature = "test")]
-pub mod fel4_test;
 
 #[macro_use]
 mod macros;
 mod bootinfo_manager;
 mod thread_a;
 
+use alloc::boxed::Box;
 use bootinfo_manager::BootInfoManager;
 use core::mem;
 use sel4_sys::*;
@@ -28,17 +19,11 @@ use sel4_sys::DebugOutHandle;
 
 /// size of thread stack in bytes
 const THREAD_STACK_SIZE: usize = 4096;
-static mut THREAD_STACK: *const [u64; THREAD_STACK_SIZE / 8] = &[0; THREAD_STACK_SIZE / 8];
 
-/// arbitrary (but free) address for IPC buffer
-const IPC_BUFFER_VADDR: seL4_Word = 0x0700_0000;
-
-/// TODO
 pub fn is_fault(badge: seL4_Word) -> bool {
     (badge == thread_a::FAULT_EP_BADGE) as bool
 }
 
-/// TODO
 pub fn handle_fault(badge: seL4_Word) {
     debug_println!("!!! thread faulted - badge = 0x{:X} !!!\n", badge);
 }
@@ -55,6 +40,7 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
         &mut bi_mngr,
         global_fault_ep_cap,
         thread_a::FAULT_EP_BADGE,
+        thread_a::IPC_BUFFER_VADDR,
         thread_a::run,
     );
 
@@ -77,11 +63,11 @@ fn create_global_fault_ep(bi_mngr: &mut BootInfoManager) -> seL4_CPtr {
     ep_cap
 }
 
-// TODO - ipc vaddr
 fn create_thread(
     bi_mngr: &mut BootInfoManager,
     fault_ep_cap: seL4_CPtr,
     fault_ep_badge: seL4_Word,
+    ipc_buffer_vaddr: seL4_Word,
     run_fn: fn(),
 ) {
     let cspace_cap = seL4_CapInitThreadCNode;
@@ -95,7 +81,6 @@ fn create_thread(
 
     let untyped_cap = bi_mngr.get_untyped(None, untyped_size_bytes).unwrap();
 
-    // TODO - should IPC cap use get_frame_cap() / io_map()?
     let tcb_cap = bi_mngr.get_next_free_cap_slot().unwrap();
     let ipc_frame_cap = bi_mngr.get_next_free_cap_slot().unwrap();
     let badged_ep_cap = bi_mngr.get_next_free_cap_slot().unwrap();
@@ -117,12 +102,12 @@ fn create_thread(
     assert!(err == 0, "Failed to retype untyped memory");
 
     // map the frame into the vspace at ipc_buffer_vaddr
-    let err = bi_mngr.map_paddr(untyped_cap, ipc_frame_cap, IPC_BUFFER_VADDR);
+    let err = bi_mngr.map_paddr(untyped_cap, ipc_frame_cap, ipc_buffer_vaddr);
     assert!(err == 0, "Failed to map IPC frame");
 
     // set the IPC buffer's virtual address in a field of the IPC buffer
-    let ipc_buffer: *mut seL4_IPCBuffer = IPC_BUFFER_VADDR as _;
-    unsafe { (*ipc_buffer).userData = IPC_BUFFER_VADDR };
+    let ipc_buffer: *mut seL4_IPCBuffer = ipc_buffer_vaddr as _;
+    unsafe { (*ipc_buffer).userData = ipc_buffer_vaddr };
 
     // mint a copy of the endpoint cap into our cspace
     let err: seL4_Error = unsafe {
@@ -147,7 +132,7 @@ fn create_thread(
             seL4_NilData.into(),
             pd_cap.into(),
             seL4_NilData.into(),
-            IPC_BUFFER_VADDR,
+            ipc_buffer_vaddr,
             ipc_frame_cap,
         )
     };
@@ -162,8 +147,9 @@ fn create_thread(
         stack_alignment_requirement
     );
 
-    let stack_base = unsafe { THREAD_STACK as usize };
-    let stack_top = stack_base + THREAD_STACK_SIZE;
+    let thread_stack_box: Box<u64> = Box::new((THREAD_STACK_SIZE / 8) as u64);
+    let stack_base: &'static mut u64 = Box::leak(thread_stack_box);
+    let stack_top = stack_base as *const _ as usize + THREAD_STACK_SIZE;
 
     assert!(
         stack_top % stack_alignment_requirement == 0,

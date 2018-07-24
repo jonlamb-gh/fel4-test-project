@@ -4,19 +4,14 @@
 #![cfg_attr(feature = "alloc", feature(alloc))]
 #![feature(lang_items, core_intrinsics)]
 #![feature(global_asm)]
-#![cfg_attr(feature = "alloc", feature(global_allocator))]
 #![feature(panic_implementation)]
 #![feature(panic_info_message)]
+#![feature(alloc_error_handler)]
 
-#[cfg(feature = "alloc")]
 extern crate alloc;
-extern crate sel4_sys;
-#[cfg(feature = "alloc")]
-extern crate wee_alloc;
-#[cfg(all(feature = "test", feature = "alloc"))]
-#[macro_use]
-extern crate proptest;
 extern crate fel4_test_project;
+extern crate sel4_sys;
+extern crate wee_alloc;
 
 #[path = "../macros.rs"]
 #[macro_use]
@@ -27,7 +22,6 @@ use core::intrinsics;
 use core::panic::PanicInfo;
 use sel4_sys::*;
 
-#[cfg(feature = "alloc")]
 #[global_allocator]
 static ALLOCATOR: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 
@@ -157,7 +151,9 @@ pub fn eh_personality() {
     }
 }
 
-pub fn alloc_error_handler(_layout: Layout) -> ! {
+#[lang = "oom"]
+#[no_mangle]
+pub extern "C" fn oom(_layout: Layout) -> ! {
     #[cfg(feature = "KernelPrinting")]
     {
         use core::fmt::Write;
