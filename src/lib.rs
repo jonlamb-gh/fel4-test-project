@@ -11,6 +11,7 @@ mod thread_a;
 mod thread_b;
 
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use bootinfo_manager::BootInfoManager;
 use core::mem;
 use sel4_sys::*;
@@ -21,14 +22,21 @@ use sel4_sys::DebugOutHandle;
 /// size of thread stack in bytes
 const THREAD_STACK_SIZE: usize = 4096;
 
+struct ThreadInfo {
+    fault_ep: seL4_CPtr,
+    fault_ep_badge: seL4_Word,
+}
+
 pub struct InitSystem {
     bi_mngr: BootInfoManager,
+    thread_infos: Vec<ThreadInfo>,
 }
 
 impl InitSystem {
     pub fn new(bootinfo: &'static seL4_BootInfo) -> InitSystem {
         InitSystem {
             bi_mngr: BootInfoManager::new(bootinfo),
+            thread_infos: Vec::new(),
         }
     }
 
@@ -56,11 +64,13 @@ impl InitSystem {
     }
 
     pub fn is_fault(&self, badge: seL4_Word) -> bool {
-        match badge {
-            thread_a::FAULT_EP_BADGE => true,
-            thread_b::FAULT_EP_BADGE => true,
-            _ => false,
+        for thread in self.thread_infos.iter() {
+            if thread.fault_ep_badge == badge {
+                return true;
+            }
         }
+
+        false
     }
 
     pub fn handle_fault(&self, badge: seL4_Word) {
@@ -198,6 +208,11 @@ impl InitSystem {
 
         let err = unsafe { seL4_TCB_SetPriority(tcb_cap, seL4_CapInitThreadTCB.into(), 255) };
         assert!(err == 0, "Failed to set TCB priority");
+
+        self.thread_infos.push(ThreadInfo {
+            fault_ep: badged_ep_cap,
+            fault_ep_badge,
+        });
 
         let err = unsafe { seL4_TCB_Resume(tcb_cap) };
         assert!(err == 0, "Failed to resume TCB");

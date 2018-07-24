@@ -10,4 +10,6 @@ pub const IPC_BUFFER_VADDR: seL4_Word = 0x0700_0000;
 
 pub fn run() {
     debug_println!("thread_a::run()");
+
+    debug_println!("thread_a::done");
 }
