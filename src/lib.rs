@@ -17,6 +17,7 @@ pub mod fel4_test;
 #[macro_use]
 mod macros;
 mod bootinfo_manager;
+mod thread_a;
 
 use bootinfo_manager::BootInfoManager;
 use core::mem;
@@ -25,8 +26,6 @@ use sel4_sys::*;
 #[cfg(feature = "KernelPrinting")]
 use sel4_sys::DebugOutHandle;
 
-pub const FAULT_EP_BADGE: seL4_Word = 0x61;
-
 /// size of thread stack in bytes
 const THREAD_STACK_SIZE: usize = 4096;
 static mut THREAD_STACK: *const [u64; THREAD_STACK_SIZE / 8] = &[0; THREAD_STACK_SIZE / 8];
@@ -34,19 +33,63 @@ static mut THREAD_STACK: *const [u64; THREAD_STACK_SIZE / 8] = &[0; THREAD_STACK
 /// arbitrary (but free) address for IPC buffer
 const IPC_BUFFER_VADDR: seL4_Word = 0x0700_0000;
 
-/// Returns cap to global fault endpoint if so desired (TODO and handler fn?)
+/// TODO
+pub fn is_fault(badge: seL4_Word) -> bool {
+    (badge == thread_a::FAULT_EP_BADGE) as bool
+}
+
+/// TODO
+pub fn handle_fault(badge: seL4_Word) {
+    debug_println!("!!! thread faulted - badge = 0x{:X} !!!\n", badge);
+}
+
+/// Returns cap to global fault endpoint if one is created/used
 pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
     let mut bi_mngr = BootInfoManager::new(bootinfo);
 
     bi_mngr.debug_print_bootinfo();
 
+    let global_fault_ep_cap = create_global_fault_ep(&mut bi_mngr);
+
+    create_thread(
+        &mut bi_mngr,
+        global_fault_ep_cap,
+        thread_a::FAULT_EP_BADGE,
+        thread_a::run,
+    );
+
+    Some(global_fault_ep_cap)
+}
+
+fn create_global_fault_ep(bi_mngr: &mut BootInfoManager) -> seL4_CPtr {
+    let untyped_cap = bi_mngr.get_untyped(None, 1 << seL4_EndpointBits).unwrap();
+
+    let ep_cap = bi_mngr.get_next_free_cap_slot().unwrap();
+
+    let err = bi_mngr.untyped_retype_root(
+        untyped_cap,
+        api_object_seL4_EndpointObject,
+        seL4_EndpointBits as _,
+        ep_cap,
+    );
+    assert!(err == 0, "Failed to retype untyped memory");
+
+    ep_cap
+}
+
+// TODO - ipc vaddr
+fn create_thread(
+    bi_mngr: &mut BootInfoManager,
+    fault_ep_cap: seL4_CPtr,
+    fault_ep_badge: seL4_Word,
+    run_fn: fn(),
+) {
     let cspace_cap = seL4_CapInitThreadCNode;
     let pd_cap = seL4_CapInitThreadVSpace;
 
     // untyped large enough for:
     // - thread TCB
     // - IPC frame
-    // - endpoint (global fault ep)
     // - badged endpoint (provided to thread as fault ep)
     let untyped_size_bytes = (1 << seL4_TCBBits) + (1 << seL4_PageBits) + (1 << seL4_EndpointBits);
 
@@ -55,7 +98,6 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
     // TODO - should IPC cap use get_frame_cap() / io_map()?
     let tcb_cap = bi_mngr.get_next_free_cap_slot().unwrap();
     let ipc_frame_cap = bi_mngr.get_next_free_cap_slot().unwrap();
-    let ep_cap = bi_mngr.get_next_free_cap_slot().unwrap();
     let badged_ep_cap = bi_mngr.get_next_free_cap_slot().unwrap();
 
     let err = bi_mngr.untyped_retype_root(
@@ -74,33 +116,25 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
     );
     assert!(err == 0, "Failed to retype untyped memory");
 
-    let err = bi_mngr.untyped_retype_root(
-        untyped_cap,
-        api_object_seL4_EndpointObject,
-        seL4_EndpointBits as _,
-        ep_cap,
-    );
-    assert!(err == 0, "Failed to retype untyped memory");
-
     // map the frame into the vspace at ipc_buffer_vaddr
     let err = bi_mngr.map_paddr(untyped_cap, ipc_frame_cap, IPC_BUFFER_VADDR);
     assert!(err == 0, "Failed to map IPC frame");
 
     // set the IPC buffer's virtual address in a field of the IPC buffer
-    let mut ipc_buffer: *mut seL4_IPCBuffer = IPC_BUFFER_VADDR as _;
+    let ipc_buffer: *mut seL4_IPCBuffer = IPC_BUFFER_VADDR as _;
     unsafe { (*ipc_buffer).userData = IPC_BUFFER_VADDR };
 
-    // Mint a copy of the endpoint cap into our cspace
+    // mint a copy of the endpoint cap into our cspace
     let err: seL4_Error = unsafe {
         seL4_CNode_Mint(
             cspace_cap,
             badged_ep_cap,
             seL4_WordBits as _,
             cspace_cap,
-            ep_cap,
+            fault_ep_cap,
             seL4_WordBits as _,
             seL4_CapRights_new(1, 1, 1),
-            0x61, // badge
+            fault_ep_badge,
         )
     };
     assert!(err == 0, "Failed to mint a copy of the fault endpoint");
@@ -141,7 +175,7 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
 
     #[allow(const_err)]
     {
-        regs.pc = run as _;
+        regs.pc = run_fn as _;
     }
 
     regs.sp = stack_top as seL4_Word;
@@ -155,11 +189,4 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
 
     let err = unsafe { seL4_TCB_Resume(tcb_cap) };
     assert!(err == 0, "Failed to resume TCB");
-
-    Some(ep_cap)
-}
-
-fn run() {
-    debug_println!("lib::run()");
-    debug_println!("lib::run() about to fault");
 }

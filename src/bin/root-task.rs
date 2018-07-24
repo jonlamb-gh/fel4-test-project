@@ -24,7 +24,6 @@ mod macros;
 
 use core::alloc::Layout;
 use core::intrinsics;
-use core::mem;
 use core::panic::PanicInfo;
 use sel4_sys::*;
 
@@ -180,12 +179,12 @@ fn main() {
         if let Some(fault_ep) = global_fault_ep {
             let mut badge: seL4_Word = 0;
 
-            let msg_tag = unsafe { seL4_Wait(fault_ep, &mut badge) };
+            let _msg_tag = unsafe { seL4_Wait(fault_ep, &mut badge) };
 
             debug_println!("\nroot-task thread got notification badge 0x{:X}", badge);
 
-            if (badge == fel4_test_project::FAULT_EP_BADGE) {
-                debug_println!("!!! thread faulted !!!\n");
+            if fel4_test_project::is_fault(badge) {
+                fel4_test_project::handle_fault(badge);
             }
         } else {
             unsafe {
