@@ -1,0 +1,23 @@
+[package]
+name = "fel4-test-project"
+version = "0.1.0"
+authors = ["jonlamb-gh <lamb.jon.io@gmail.com>"]
+
+[dependencies]
+libsel4-sys = {git = "https://github.com/PolySync/libsel4-sys.git", branch = "master"}
+
+[dependencies.wee_alloc]
+version = "0.4"
+features = ["static_array_backend"]
+optional = true
+
+[dependencies.proptest]
+version = "0.7"
+default-features = false
+features = ["alloc", "nightly"]
+optional = true
+
+[features]
+default = []
+alloc = ["wee_alloc"]
+test = ["alloc", "proptest"]
