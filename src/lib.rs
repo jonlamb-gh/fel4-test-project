@@ -8,6 +8,7 @@ extern crate sel4_sys;
 mod macros;
 mod bootinfo_manager;
 mod thread_a;
+mod thread_b;
 
 use alloc::boxed::Box;
 use bootinfo_manager::BootInfoManager;
@@ -21,7 +22,11 @@ use sel4_sys::DebugOutHandle;
 const THREAD_STACK_SIZE: usize = 4096;
 
 pub fn is_fault(badge: seL4_Word) -> bool {
-    (badge == thread_a::FAULT_EP_BADGE) as bool
+    match badge {
+        thread_a::FAULT_EP_BADGE => true,
+        thread_b::FAULT_EP_BADGE => true,
+        _ => false,
+    }
 }
 
 pub fn handle_fault(badge: seL4_Word) {
@@ -42,6 +47,14 @@ pub fn init(bootinfo: &'static seL4_BootInfo) -> Option<seL4_CPtr> {
         thread_a::FAULT_EP_BADGE,
         thread_a::IPC_BUFFER_VADDR,
         thread_a::run,
+    );
+
+    create_thread(
+        &mut bi_mngr,
+        global_fault_ep_cap,
+        thread_b::FAULT_EP_BADGE,
+        thread_b::IPC_BUFFER_VADDR,
+        thread_b::run,
     );
 
     Some(global_fault_ep_cap)
