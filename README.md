@@ -45,9 +45,27 @@ bootinfo.untypedList
 
 --------------------------
 
-lib::run()
-lib::run() about to fault
+thread_b::run()
+thread_b::done
+!!! thread faulted - badge = 0xB !!!
 
-root-task thread got notification badge 0x61
-!!! thread faulted !!!
+Dumping all tcbs!
+Name                                            State           IP                       Prio    Core
+--------------------------------------------------------------------------------------
+child of: 'rootserver'                          blocked on reply        (nil)   255                     0
+child of: 'rootserver'                          restart         0x1a6c4 255                     0
+idle_thread                                     idle            (nil)   0                       0
+rootserver                                      running         0x21864 255                     0
+
+thread_a::run()
+thread_a::done
+!!! thread faulted - badge = 0xA !!!
+
+Dumping all tcbs!
+Name                                            State           IP                       Prio    Core
+--------------------------------------------------------------------------------------
+child of: 'rootserver'                          blocked on reply        (nil)   255                     0
+child of: 'rootserver'                          blocked on reply        (nil)   255                     0
+idle_thread                                     idle            (nil)   0                       0
+rootserver                                      running         0x21864 255                     0
 ```

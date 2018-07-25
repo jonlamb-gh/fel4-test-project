@@ -23,6 +23,7 @@ use sel4_sys::DebugOutHandle;
 const THREAD_STACK_SIZE: usize = 4096;
 
 struct ThreadInfo {
+    tcb_cap: seL4_CPtr,
     fault_ep: seL4_CPtr,
     fault_ep_badge: seL4_Word,
 }
@@ -60,11 +61,13 @@ impl InitSystem {
             thread_b::run,
         );
 
+        self.start_threads();
+
         Some(global_fault_ep_cap)
     }
 
     pub fn is_fault(&self, badge: seL4_Word) -> bool {
-        for thread in self.thread_infos.iter() {
+        for ref thread in self.thread_infos.iter() {
             if thread.fault_ep_badge == badge {
                 return true;
             }
@@ -75,6 +78,8 @@ impl InitSystem {
 
     pub fn handle_fault(&self, badge: seL4_Word) {
         debug_println!("!!! thread faulted - badge = 0x{:X} !!!\n", badge);
+        unsafe { seL4_DebugDumpScheduler() };
+        debug_println!("");
     }
 
     fn create_global_fault_ep(&mut self) -> seL4_CPtr {
@@ -96,6 +101,14 @@ impl InitSystem {
         ep_cap
     }
 
+    fn start_threads(&mut self) {
+        for ref thread in self.thread_infos.iter() {
+            let err = unsafe { seL4_TCB_Resume(thread.tcb_cap) };
+            assert!(err == 0, "Failed to resume TCB");
+        }
+    }
+
+    /// Create thread, does not start the thread
     fn create_thread(
         &mut self,
         fault_ep_cap: seL4_CPtr,
@@ -183,6 +196,8 @@ impl InitSystem {
             stack_alignment_requirement
         );
 
+        // create the thread's stack from the global allocator, which is backed by
+        // a static array, just leak from box since it won't be given back
         let thread_stack_box: Box<u64> = Box::new((THREAD_STACK_SIZE / 8) as u64);
         let stack_base: &'static mut u64 = Box::leak(thread_stack_box);
         let stack_top = stack_base as *const _ as usize + THREAD_STACK_SIZE;
@@ -202,6 +217,7 @@ impl InitSystem {
 
         regs.sp = stack_top as seL4_Word;
 
+        // only using pc, sp for now
         let context_size = 2;
         let err = unsafe { seL4_TCB_WriteRegisters(tcb_cap, 0, 0, context_size, &mut regs) };
         assert!(err == 0, "Failed to write TCB registers");
@@ -210,11 +226,14 @@ impl InitSystem {
         assert!(err == 0, "Failed to set TCB priority");
 
         self.thread_infos.push(ThreadInfo {
+            tcb_cap,
             fault_ep: badged_ep_cap,
             fault_ep_badge,
         });
 
+        /*
         let err = unsafe { seL4_TCB_Resume(tcb_cap) };
         assert!(err == 0, "Failed to resume TCB");
+        */
     }
 }

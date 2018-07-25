@@ -179,10 +179,10 @@ fn main() {
 
             let _msg_tag = unsafe { seL4_Wait(fault_ep, &mut badge) };
 
-            debug_println!("\nroot-task thread got notification badge 0x{:X}", badge);
-
             if init_sys.is_fault(badge) {
                 init_sys.handle_fault(badge);
+            } else {
+                debug_println!("\nroot-task got notification - badge 0x{:X}", badge);
             }
         } else {
             unsafe {
