@@ -1,5 +1,7 @@
 use sel4_sys::seL4_Word;
 
+//use alloc::vec::Vec;
+
 #[cfg(feature = "KernelPrinting")]
 use sel4_sys::DebugOutHandle;
 
@@ -10,6 +12,9 @@ pub const IPC_BUFFER_VADDR: seL4_Word = 0x0700_0000;
 
 pub fn run() {
     debug_println!("thread_a::run()");
+
+    //let mut v = Vec::new();
+    //v.push(1);
 
     debug_println!("thread_a::done");
 }

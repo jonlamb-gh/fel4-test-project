@@ -6,6 +6,8 @@ Rust running on seL4 threads.
 ## Building
 
 ```bash
+./scripts/prepare-repos
+
 cargo fel4 build
 
 cargo fel4 simulate

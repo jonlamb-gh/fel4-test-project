@@ -24,7 +24,7 @@ const THREAD_STACK_SIZE: usize = 4096;
 
 struct ThreadInfo {
     tcb_cap: seL4_CPtr,
-    fault_ep: seL4_CPtr,
+    fault_ep_cap: seL4_CPtr,
     fault_ep_badge: seL4_Word,
 }
 
@@ -34,6 +34,7 @@ pub struct InitSystem {
 }
 
 impl InitSystem {
+    /// This will be created from the callers's (root-task) stack
     pub fn new(bootinfo: &'static seL4_BootInfo) -> InitSystem {
         InitSystem {
             bi_mngr: BootInfoManager::new(bootinfo),
@@ -227,7 +228,7 @@ impl InitSystem {
 
         self.thread_infos.push(ThreadInfo {
             tcb_cap,
-            fault_ep: badged_ep_cap,
+            fault_ep_cap: badged_ep_cap,
             fault_ep_badge,
         });
 
