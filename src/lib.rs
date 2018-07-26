@@ -26,6 +26,8 @@ struct ThreadInfo {
     tcb_cap: seL4_CPtr,
     fault_ep_cap: seL4_CPtr,
     fault_ep_badge: seL4_Word,
+    ipc_ep_cap: seL4_CPtr,
+    ipc_ep_badge: seL4_Word,
 }
 
 pub struct InitSystem {
@@ -46,20 +48,31 @@ impl InitSystem {
     pub fn init(&mut self) -> Option<seL4_CPtr> {
         self.bi_mngr.debug_print_bootinfo();
 
-        let global_fault_ep_cap = self.create_global_fault_ep();
-
-        self.create_thread(
-            global_fault_ep_cap,
-            thread_a::FAULT_EP_BADGE,
-            thread_a::IPC_BUFFER_VADDR,
-            thread_a::run,
-        );
+        let global_fault_ep_cap = self.create_ep();
 
         self.create_thread(
             global_fault_ep_cap,
             thread_b::FAULT_EP_BADGE,
+            seL4_CapNull,
+            thread_b::IPC_EP_BADGE,
             thread_b::IPC_BUFFER_VADDR,
             thread_b::run,
+        );
+
+        let ep_cap = self
+            .thread_infos
+            .iter()
+            .find(|t| t.ipc_ep_badge == thread_b::IPC_EP_BADGE)
+            .unwrap()
+            .ipc_ep_cap;
+
+        self.create_thread(
+            global_fault_ep_cap,
+            thread_a::FAULT_EP_BADGE,
+            ep_cap, // give thread A access to thread B's IPC ep
+            thread_a::IPC_EP_BADGE,
+            thread_a::IPC_BUFFER_VADDR,
+            thread_a::run,
         );
 
         self.start_threads();
@@ -83,7 +96,7 @@ impl InitSystem {
         debug_println!("");
     }
 
-    fn create_global_fault_ep(&mut self) -> seL4_CPtr {
+    fn create_ep(&mut self) -> seL4_CPtr {
         let untyped_cap = self
             .bi_mngr
             .get_untyped(None, 1 << seL4_EndpointBits)
@@ -114,8 +127,10 @@ impl InitSystem {
         &mut self,
         fault_ep_cap: seL4_CPtr,
         fault_ep_badge: seL4_Word,
+        aux_ep_cap: seL4_CPtr,
+        ipc_ep_badge: seL4_Word,
         ipc_buffer_vaddr: seL4_Word,
-        run_fn: fn(),
+        run_fn: fn(seL4_CPtr, seL4_CPtr),
     ) {
         let cspace_cap = seL4_CapInitThreadCNode;
         let pd_cap = seL4_CapInitThreadVSpace;
@@ -131,7 +146,9 @@ impl InitSystem {
 
         let tcb_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
         let ipc_frame_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
-        let badged_ep_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
+        let badged_fault_ep_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
+        let ipc_ep_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
+        let badged_ipc_ep_cap = self.bi_mngr.get_next_free_cap_slot().unwrap();
 
         let err = self.bi_mngr.untyped_retype_root(
             untyped_cap,
@@ -149,6 +166,14 @@ impl InitSystem {
         );
         assert!(err == 0, "Failed to retype untyped memory");
 
+        let err = self.bi_mngr.untyped_retype_root(
+            untyped_cap,
+            api_object_seL4_EndpointObject,
+            seL4_EndpointBits as _,
+            ipc_ep_cap,
+        );
+        assert!(err == 0, "Failed to retype untyped memory");
+
         // map the frame into the vspace at ipc_buffer_vaddr
         let err = self
             .bi_mngr
@@ -163,7 +188,7 @@ impl InitSystem {
         let err: seL4_Error = unsafe {
             seL4_CNode_Mint(
                 cspace_cap,
-                badged_ep_cap,
+                badged_fault_ep_cap,
                 seL4_WordBits as _,
                 cspace_cap,
                 fault_ep_cap,
@@ -175,9 +200,23 @@ impl InitSystem {
         assert!(err == 0, "Failed to mint a copy of the fault endpoint");
 
         let err: seL4_Error = unsafe {
+            seL4_CNode_Mint(
+                cspace_cap,
+                badged_ipc_ep_cap,
+                seL4_WordBits as _,
+                cspace_cap,
+                ipc_ep_cap,
+                seL4_WordBits as _,
+                seL4_CapRights_new(1, 1, 1),
+                ipc_ep_badge,
+            )
+        };
+        assert!(err == 0, "Failed to mint a copy of the IPC endpoint");
+
+        let err: seL4_Error = unsafe {
             seL4_TCB_Configure(
                 tcb_cap,
-                badged_ep_cap,
+                badged_fault_ep_cap,
                 cspace_cap.into(),
                 seL4_NilData.into(),
                 pd_cap.into(),
@@ -214,12 +253,18 @@ impl InitSystem {
         #[allow(const_err)]
         {
             regs.pc = run_fn as _;
+
+            // badged IPC ep cap in r0 is the function parameter
+            regs.r0 = badged_ipc_ep_cap as _;
+
+            // testing
+            regs.r1 = aux_ep_cap as _;
         }
 
         regs.sp = stack_top as seL4_Word;
 
-        // only using pc, sp for now
-        let context_size = 2;
+        // using pc, sp, (cpsr), r0 and r1
+        let context_size = 5;
         let err = unsafe { seL4_TCB_WriteRegisters(tcb_cap, 0, 0, context_size, &mut regs) };
         assert!(err == 0, "Failed to write TCB registers");
 
@@ -228,13 +273,10 @@ impl InitSystem {
 
         self.thread_infos.push(ThreadInfo {
             tcb_cap,
-            fault_ep_cap: badged_ep_cap,
+            fault_ep_cap: badged_fault_ep_cap,
             fault_ep_badge,
+            ipc_ep_cap: badged_ipc_ep_cap,
+            ipc_ep_badge,
         });
-
-        /*
-        let err = unsafe { seL4_TCB_Resume(tcb_cap) };
-        assert!(err == 0, "Failed to resume TCB");
-        */
     }
 }

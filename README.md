@@ -47,27 +47,49 @@ bootinfo.untypedList
 
 --------------------------
 
+thread_a::run()
+thread_a::ep_cap = 0x2119 - aux_ep_cap = 0x2114
+thread_a::sending message to B
 thread_b::run()
+thread_b::ep_cap = 0x2114 - aux_ep_cap = 0x0
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
+thread_a::sending message to B
+thread_b::got msg from A, sending reply
 thread_b::done
 !!! thread faulted - badge = 0xB !!!
 
 Dumping all tcbs!
 Name                                            State           IP                       Prio    Core
 --------------------------------------------------------------------------------------
-child of: 'rootserver'                          blocked on reply        (nil)   255                     0
-child of: 'rootserver'                          restart         0x1a6c4 255                     0
+child of: 'rootserver'                          running         0x22fe4 255                     0
+child of: 'rootserver'                          blocked on reply        (nil)   255                   0
 idle_thread                                     idle            (nil)   0                       0
-rootserver                                      running         0x21864 255                     0
+rootserver                                      running         0x22fe4 255                     0
 
-thread_a::run()
 thread_a::done
 !!! thread faulted - badge = 0xA !!!
 
 Dumping all tcbs!
 Name                                            State           IP                       Prio    Core
 --------------------------------------------------------------------------------------
-child of: 'rootserver'                          blocked on reply        (nil)   255                     0
-child of: 'rootserver'                          blocked on reply        (nil)   255                     0
+child of: 'rootserver'                          blocked on reply        (nil)   255                   0
+child of: 'rootserver'                          blocked on reply        (nil)   255                   0
 idle_thread                                     idle            (nil)   0                       0
-rootserver                                      running         0x21864 255                     0
+rootserver                                      running         0x22fe4 255                     0
 ```
