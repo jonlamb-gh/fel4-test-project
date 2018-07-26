@@ -53,13 +53,13 @@ impl InitSystem {
         self.create_thread(
             global_fault_ep_cap,
             thread_b::FAULT_EP_BADGE,
-            seL4_CapNull,
             thread_b::IPC_EP_BADGE,
             thread_b::IPC_BUFFER_VADDR,
+            None,
             thread_b::run,
         );
 
-        let ep_cap = self
+        let thread_b_ipc_ep_cap = self
             .thread_infos
             .iter()
             .find(|t| t.ipc_ep_badge == thread_b::IPC_EP_BADGE)
@@ -69,9 +69,9 @@ impl InitSystem {
         self.create_thread(
             global_fault_ep_cap,
             thread_a::FAULT_EP_BADGE,
-            ep_cap, // give thread A access to thread B's IPC ep
             thread_a::IPC_EP_BADGE,
             thread_a::IPC_BUFFER_VADDR,
+            Some(thread_b_ipc_ep_cap), // give thread A access to thread B's IPC ep
             thread_a::run,
         );
 
@@ -127,10 +127,10 @@ impl InitSystem {
         &mut self,
         fault_ep_cap: seL4_CPtr,
         fault_ep_badge: seL4_Word,
-        aux_ep_cap: seL4_CPtr,
         ipc_ep_badge: seL4_Word,
         ipc_buffer_vaddr: seL4_Word,
-        run_fn: fn(seL4_CPtr, seL4_CPtr),
+        run_fn_ipc_ep_cap: Option<seL4_CPtr>,
+        run_fn: fn(seL4_CPtr),
     ) {
         let cspace_cap = seL4_CapInitThreadCNode;
         let pd_cap = seL4_CapInitThreadVSpace;
@@ -255,16 +255,17 @@ impl InitSystem {
             regs.pc = run_fn as _;
 
             // badged IPC ep cap in r0 is the function parameter
-            regs.r0 = badged_ipc_ep_cap as _;
-
-            // testing
-            regs.r1 = aux_ep_cap as _;
+            if let Some(ipc_ep_arg) = run_fn_ipc_ep_cap {
+                regs.r0 = ipc_ep_arg as _;
+            } else {
+                regs.r0 = badged_ipc_ep_cap as _;
+            }
         }
 
         regs.sp = stack_top as seL4_Word;
 
-        // using pc, sp, (cpsr), r0 and r1
-        let context_size = 5;
+        // using pc, sp, (cpsr) and r0
+        let context_size = 4;
         let err = unsafe { seL4_TCB_WriteRegisters(tcb_cap, 0, 0, context_size, &mut regs) };
         assert!(err == 0, "Failed to write TCB registers");
 

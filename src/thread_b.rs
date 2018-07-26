@@ -9,13 +9,9 @@ pub const IPC_EP_BADGE: seL4_Word = 0x1B;
 /// arbitrary (but free) address for IPC buffer
 pub const IPC_BUFFER_VADDR: seL4_Word = 0x0700_1000;
 
-pub fn run(ep_cap: seL4_CPtr, aux_ep_cap: seL4_CPtr) {
+pub fn run(ep_cap: seL4_CPtr) {
     debug_println!("thread_b::run()");
-    debug_println!(
-        "thread_b::ep_cap = 0x{:X} - aux_ep_cap = 0x{:X}",
-        ep_cap,
-        aux_ep_cap
-    );
+    debug_println!("thread_b::ep_cap = 0x{:X}", ep_cap,);
 
     for _ in 0..10 {
         let mut badge: seL4_Word = 0;
