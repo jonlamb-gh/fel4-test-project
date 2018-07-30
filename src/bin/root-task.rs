@@ -11,8 +11,8 @@
 extern crate alloc;
 extern crate fel4_test_project;
 extern crate sel4_sys;
-extern crate wee_alloc;
 extern crate sel4twinkle_alloc;
+extern crate wee_alloc;
 
 #[path = "../macros.rs"]
 #[macro_use]
@@ -22,6 +22,7 @@ use core::alloc::Layout;
 use core::intrinsics;
 use core::panic::PanicInfo;
 use sel4_sys::*;
+use sel4twinkle_alloc::Allocator;
 
 #[global_allocator]
 static ALLOCATOR: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
