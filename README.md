@@ -3,6 +3,10 @@ A feL4 test project
 
 Rust running on seL4 threads.
 
+## Sub-projects
+
+- [sel4twinkle-alloc](sel4twinkle-alloc/) Rust port of the sel4twinkle C library
+
 ## Building
 
 ```bash

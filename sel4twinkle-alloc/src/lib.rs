@@ -3,11 +3,17 @@
 /// A Rust port of libsel4twinkle allocator.
 ///
 /// https://github.com/smaccm/libsel4twinkle
+///
+/// TODO docs and such
+///
 extern crate sel4_sys;
 
 use sel4_sys::seL4_CPtr;
 
 mod allocator;
+mod first_stage_allocator;
+mod object_allocator;
+mod vka;
 
 pub const MIN_UNTYPED_SIZE: usize = 4;
 pub const MAX_UNTYPED_SIZE: usize = 32;

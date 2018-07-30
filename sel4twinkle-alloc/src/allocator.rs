@@ -8,8 +8,7 @@ use sel4_sys::{
 };
 
 impl Allocator {
-    /// TODO - would be nice allow a specific memory location?
-    /// TODO - provide bootinfo here, or `create_bootstrap_allocator()` fn?
+    /// TODO
     pub fn new() -> Allocator {
         let alloc: Allocator = unsafe { mem::zeroed() };
 
@@ -166,21 +165,17 @@ impl Allocator {
         }
 
         // Otherwise, try splitting something of a bigger size, recursively
-        if let Some(big_untyped_item) = self.alloc_untyped(size_bits + 1) {
-            if let Some(range) = self.retype_untyped_memory(
-                big_untyped_item,
-                api_object_seL4_UntypedObject,
-                size_bits,
-                2,
-            ) {
-                assert!(range.count != 0);
-                pool = range;
-            } else {
-                return None;
-            }
-        } else {
-            return None;
-        }
+        let big_untyped_item = self.alloc_untyped(size_bits + 1)?;
+
+        let range = self.retype_untyped_memory(
+            big_untyped_item,
+            api_object_seL4_UntypedObject,
+            size_bits,
+            2,
+        )?;
+
+        assert!(range.count != 0);
+        pool = range;
 
         // Allocate and return out of our split
         self.range_alloc(&mut pool, 1)
