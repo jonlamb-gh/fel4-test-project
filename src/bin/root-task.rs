@@ -12,6 +12,7 @@ extern crate alloc;
 extern crate fel4_test_project;
 extern crate sel4_sys;
 extern crate wee_alloc;
+extern crate sel4twinkle_alloc;
 
 #[path = "../macros.rs"]
 #[macro_use]

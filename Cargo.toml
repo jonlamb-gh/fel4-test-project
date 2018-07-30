@@ -5,6 +5,7 @@ authors = ["jonlamb-gh <lamb.jon.io@gmail.com>"]
 
 [dependencies]
 libsel4-sys = {git = "https://github.com/jonlamb-gh/libsel4-sys.git", branch = "master"}
+sel4twinkle-alloc = {path = "sel4twinkle-alloc"}
 
 [dependencies.wee_alloc]
 version = "0.4"
