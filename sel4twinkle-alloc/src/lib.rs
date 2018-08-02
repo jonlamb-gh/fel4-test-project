@@ -11,9 +11,11 @@ extern crate sel4_sys;
 use sel4_sys::seL4_CPtr;
 
 mod allocator;
+mod cspacepath;
 mod first_stage_allocator;
 mod object_allocator;
 mod vka;
+mod vka_object;
 
 pub const MIN_UNTYPED_SIZE: usize = 4;
 pub const MAX_UNTYPED_SIZE: usize = 32;

@@ -77,10 +77,10 @@ impl Allocator {
     }
 
     /// Allocate an empty cslot.
-    pub fn alloc_cslot(&mut self) -> seL4_CPtr {
+    pub fn alloc_cslot(&mut self) -> Option<seL4_CPtr> {
         // Determine whether we have any free slots
         if (self.cslots.count - self.num_slots_used) == 0 {
-            return 0;
+            return None;
         }
 
         // Pick the first one
@@ -91,7 +91,19 @@ impl Allocator {
         // Record this slot as used
         self.num_slots_used += 1;
 
-        result
+        Some(result)
+    }
+
+    /// Free an empty cslot.
+    /// We can only free a slot if it was the last to be allocated.
+    pub fn free_cslot(&mut self, slot: seL4_CPtr) {
+        let next_slot: seL4_CPtr = self.cslots.first as seL4_CPtr
+            + self.num_slots_used as seL4_CPtr
+            + self.root_cnode_offset as seL4_CPtr;
+
+        if next_slot == (slot + 1) {
+            self.num_slots_used -= 1;
+        }
     }
 
     /// Retype an untyped item.
